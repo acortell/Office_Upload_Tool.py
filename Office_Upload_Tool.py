@@ -2,12 +2,11 @@ import pygsheets
 import phonenumbers
 import pyap
 from urlextract import URLExtract
-# TODO: Add email finder
 
 client = pygsheets.authorize()
 spreadsheet = client.open_by_url("https://docs.google.com/spreadsheets/d/171M3ZywdrUu9X6TnfN_CyrJVwO6RpNMzFjIYTwTJuEg/edit#gid=349212255")
 sheet = spreadsheet.worksheet_by_title("PasteHere")
-cells = sheet.get_col(1, include_tailing_empty=False, returnas='cells')
+cells = sheet.get_col(1, include_tailing_empty=False, returnas='cells')  # TODO: Read whole sheet instead of column 1?
 
 final_sheet = [["Name", "Address1", "Address2", "City", "State", "Zip", "Type", "Email", "Phone1", "Phone2", "Fax",
                 "Website", "Notes", "Sun", "Mon", "Tue", "Wed", "Thur", "Fri"]]
@@ -75,11 +74,15 @@ def search_blanks():
 
 def title(text):
     if text:
-        return text.title()
+        ordinals = '1St', '2Nd', '3Rd', '4Th', '5Th', '6Th', '7Th', '8Th', '9Th', '0Th', '1Th', '2Th', '3Th'
+        string = text.title()
+        for ordinal in ordinals:
+            string = string.replace(ordinal, ordinal.lower())
+        return string
 
 
 if '1' in input('If your data has a blank line after each office (and nowhere else), enter 1. Otherwise, make sure your'
-                'office titles are in bold!'):
+                ' office titles are in bold!'):
     search_blanks()
 else:
     search_bold()
@@ -97,28 +100,34 @@ for v in final_sheet[1:]:
         address2 = [x for x in address2 if x]
         v[2] = ' '.join(address2)
         v[3] = title(address[0].as_dict()['city'])
-        v[4] = title(address[0].as_dict()['region1']).upper()  # TODO: Figure out why returning Title case
+        v[4] = address[0].as_dict()['region1']
         v[5] = address[0].as_dict()['postal_code']
 
-    urls = URLExtract().find_urls(v[12].lower())
+    urls = URLExtract(extract_email=True).find_urls(v[12].lower())
+
     if urls:
-        v[11] = urls[0]  # Find URL from matrix value index 1
+        for url in urls[::-1]:
+            if '@' in url:  # This is a simplistic way to find email, a url could also have an @
+                v[7] = url  # Overwriting because I have nowhere to store additional urls/emails
+            else:
+                v[11] = url
+
     fax = v[12].lower().find('fax')
-    if fax > -1:
+    if fax > -1:  # Find returns -1 if no instance found
         try:
-            v[10] = [phonenumbers.format_number(x.number, phonenumbers.PhoneNumberFormat.E164) for x in
-                     phonenumbers.PhoneNumberMatcher(v[12][fax + 3:], 'US')][0]  # TODO: make sure consistent format
-            v[12] = v[12][:fax] + v[12][fax + 12:]  # TODO: Find a more precise way to do this
-        except IndexError:
+            match = phonenumbers.PhoneNumberMatcher(v[12][fax:], 'US').next()
+            v[12] = v[12][:fax] + v[12][fax:][0:match.start] + '[Redacted]' + v[12][fax:][match.end:]
+            v[10] = phonenumbers.format_number(match.number, phonenumbers.PhoneNumberFormat.RFC3966)[7:]
+        except StopIteration:
             pass
 
     for match in phonenumbers.PhoneNumberMatcher(v[12], "US"):
         if not v[8]:
-            v[8] = phonenumbers.format_number(match.number, phonenumbers.PhoneNumberFormat.NATIONAL)
+            v[8] = phonenumbers.format_number(match.number, phonenumbers.PhoneNumberFormat.RFC3966)[7:]
         elif not v[9]:
-            v[9] = phonenumbers.format_number(match.number, phonenumbers.PhoneNumberFormat.NATIONAL)
+            v[9] = phonenumbers.format_number(match.number, phonenumbers.PhoneNumberFormat.RFC3966)[7:]
         elif not v[10]:
-            v[10] = phonenumbers.format_number(match.number, phonenumbers.PhoneNumberFormat.NATIONAL)
+            v[10] = phonenumbers.format_number(match.number, phonenumbers.PhoneNumberFormat.RFC3966)[7:]
     v[6] = 'service'
     v[14:19] = ['08:00-17:00'] * 5
 sheet = spreadsheet.worksheet_by_title("Main")
