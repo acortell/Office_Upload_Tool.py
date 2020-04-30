@@ -45,31 +45,25 @@ def search_bold():
 
 def search_blanks():
     # Remove all rows until the first non-blank row
-    while not cells[0].value.strip():  # test this
+    while not cells[0].value.strip():
         cells.pop(0)
 
     # Row tracks which row of the final sheet we are working on.
-    row = 0
+    row = 1
+    final_sheet.append(['', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', ''])
 
     # For each cell: highlighted ones are a new row for final sheet, others are info for the 2nd cell of same row.
     for c in cells:
         if c.value.strip():
-            if 'textFormat' in list(c.get_json()['userEnteredFormat'].keys()) and \
-                    'bold' in list(c.get_json()['userEnteredFormat']['textFormat'].keys()):
-                if final_sheet[row][12]:
-                    final_sheet.append(
-                        [c.value, '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', ''])
-                    row += 1
-                # If we haven't added any information on the program yet then this line must be more title
-                else:
-                    final_sheet[row][0] += ' ' + c.value.strip()
+            if not final_sheet[row][0]:
+                final_sheet[row][0] = c.value
             else:
                 if final_sheet[row][12]:
                     final_sheet[row][12] += ' '
                 final_sheet[row][12] += c.value.strip()
         else:
-            if not final_sheet[row][12]:
-                final_sheet[row][12] = '[blank row]'
+            final_sheet.append([c.value, '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', ''])
+            row += 1
 
 
 def title(text):
