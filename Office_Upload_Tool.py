@@ -9,69 +9,54 @@ spreadsheet = client.open_by_url(
 worksheet = spreadsheet.worksheet_by_title("PasteHere")
 
 
-def search_bold(in_sheet):  # TODO: Read whole sheet instead of column 1?
-    cells = in_sheet.get_col(1, include_tailing_empty=False, returnas='cells')
-    # Remove all rows until the first bold row.
-    while 'textFormat' not in list(cells[0].get_json()['userEnteredFormat'].keys()) or \
-            'bold' not in list(cells[0].get_json()['userEnteredFormat']['textFormat'].keys()):
-        cells.pop(0)
+def search_bold(in_sheet):
+    if len(in_sheet[1]) > 1:
+        temp_sheet = [in_sheet.get_row(x + 1, include_tailing_empty=False, returnas='cells') for x in
+                      range(len(list(in_sheet))) if ''.join(list(in_sheet)[x])]  # Make list of lists of cells by row
+        cells_list = [item for sublist in temp_sheet for item in sublist]  # Turn list of lists into single list
+    else:  # If only the first column has values, just get first column
+        cells_list = in_sheet.get_col(1, include_tailing_empty=False, returnas='cells')
 
     out_sheet = [["Name", "Address1", "Address2", "City", "State", "Zip", "Type", "Email", "Phone1", "Phone2", "Fax",
                   "Website", "Notes", "Sun", "Mon", "Tue", "Wed", "Thur", "Fri"]]
-
-    # Row tracks which row of the final sheet we are working on.
-    row = 0
-
-    # For each cell: highlighted ones are a new row for final sheet, others are info for the 2nd cell of same row.
-    for c in cells:
-        if c.value.strip():
-            if 'textFormat' in list(c.get_json()['userEnteredFormat'].keys()) and \
-                    'bold' in list(c.get_json()['userEnteredFormat']['textFormat'].keys()):
-                if out_sheet[row][12]:
-                    out_sheet.append(
-                        [c.value, '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', ''])
-                    row += 1
-                # If we haven't added any information on the program yet then this line must be more title
-                else:
-                    out_sheet[row][0] += ' ' + c.value.strip()
-                # TODO: Distinguish between consecutive single line offices and titles split over multiple lines
-            else:
-                if out_sheet[row][12]:
-                    out_sheet[row][12] += ' '
-                out_sheet[row][12] += c.value.strip()
-        else:
-            if not out_sheet[row][12]:
-                out_sheet[row][12] = '[blank row]'
+    out_row = 0
+    for cell in cells_list:
+        if cell.value and 'textFormat' in list(cell.get_json()['userEnteredFormat'].keys()) and 'bold' in \
+                list(cell.get_json()['userEnteredFormat']['textFormat'].keys()):  # If cell is bold
+            if out_sheet[out_row][12]:  # If we've already added info to the current row, make a new one
+                out_sheet.append([cell.value, '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', ''])
+                out_row += 1
+            else:  # If there's no info on this office yet, assume this cell is more title
+                out_sheet[out_row][0] += ' ' + cell.value
+        elif cell.value:  # There's something in the cell but it's not bold
+            if out_row > 0:  # Ignore values until the first bold value, don't add to header row
+                out_sheet[out_row][12] += cell.value + ' '
     return out_sheet
 
 
 def search_blanks(in_sheet):
-    starting_sheet = [row for row in in_sheet]
-    # Remove all rows until the first non-blank row
+    starting_sheet = in_sheet.get_all_values()
     while not starting_sheet[0][0].strip():
-        starting_sheet.pop(0)
+        starting_sheet.pop(0)  # Remove all rows until the first row that doesn't begin with a blank cell
     out_sheet_row = 1
     out_sheet = [["Name", "Address1", "Address2", "City", "State", "Zip", "Type", "Email", "Phone1", "Phone2", "Fax",
                   "Website", "Notes", "Sun", "Mon", "Tue", "Wed", "Thur", "Fri"],
                  ['', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '']]
     for row in starting_sheet:
-        if ''.join(row).strip():
-            for v in row:
-                if v:
-                    if out_sheet[out_sheet_row][0]:
-                        if out_sheet[out_sheet_row][12]:
-                            out_sheet[out_sheet_row][12] += ' '
-                        out_sheet[out_sheet_row][12] += v
-                    else:
-                        out_sheet[out_sheet_row][0] += v
-        elif out_sheet[out_sheet_row][0]:
+        if ''.join(row).strip():  # If current row is not blank
+            if out_sheet[out_sheet_row][0]:  # If current row already has a title, add all to notes
+                out_sheet[out_sheet_row][12] += ' '.join([x.strip() for x in row if x.strip()])
+            else:  # If current row has no title, first cell is title, add the rest to notes
+                out_sheet[out_sheet_row][0] = row[0]
+                out_sheet[out_sheet_row][12] += ' '.join([x.strip() for x in row[1:] if x.strip()])
+        elif out_sheet[out_sheet_row][0]: # If the current row is blank, start a new row
             out_sheet.append(['', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', ''])
             out_sheet_row += 1
     return out_sheet
 
 
 def title(text):
-    if text:
+    if text:  # Returns nothing if called on none type or empty string or list, avoiding type error
         ordinals = '1St', '2Nd', '3Rd', '4Th', '5Th', '6Th', '7Th', '8Th', '9Th', '0Th', '1Th', '2Th', '3Th'
         string = text.title()
         for ordinal in ordinals:
