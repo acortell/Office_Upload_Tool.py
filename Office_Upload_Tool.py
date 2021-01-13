@@ -10,10 +10,10 @@ worksheet = spreadsheet.worksheet_by_title("PasteHere")
 
 
 def search_bold(in_sheet):
-    if len(in_sheet[1]) > 1:
-        temp_sheet = [in_sheet.get_row(x + 1, include_tailing_empty=False, returnas='cells') for x in
-                      range(len(list(in_sheet))) if ''.join(list(in_sheet)[x])]  # Make list of lists of cells by row
-        cells_list = [item for sublist in temp_sheet for item in sublist]  # Turn list of lists into single list
+    # Check if columns 2 or 3 contain any non-bank cells.
+    if len(list(filter(None, in_sheet.get_col(2)))) > 0 or len(list(filter(None, in_sheet.get_col(3)))) > 0:
+        temp_sheet = in_sheet.get_all_values(returnas='cells')
+        cells_list = [item for sublist in temp_sheet for item in sublist]  # Makes list of lists into one list.
     else:  # If only the first column has values, just get first column
         cells_list = in_sheet.get_col(1, include_tailing_empty=False, returnas='cells')
 
@@ -21,8 +21,8 @@ def search_bold(in_sheet):
                   "Website", "Notes", "Sun", "Mon", "Tue", "Wed", "Thur", "Fri"]]
     out_row = 0
     for cell in cells_list:
-        if cell.value and 'textFormat' in list(cell.get_json()['userEnteredFormat'].keys()) and 'bold' in \
-                list(cell.get_json()['userEnteredFormat']['textFormat'].keys()):  # If cell is bold
+        if cell.value and 'textFormat' in cell.get_json()['userEnteredFormat'].keys() and 'bold' in \
+                cell.get_json()['userEnteredFormat']['textFormat'].keys():  # If cell is bold
             if out_sheet[out_row][12]:  # If we've already added info to the current row, make a new one
                 out_sheet.append([cell.value, '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', ''])
                 out_row += 1
@@ -35,7 +35,7 @@ def search_bold(in_sheet):
 
 
 def search_blanks(in_sheet):
-    starting_sheet = in_sheet.get_all_values()
+    starting_sheet = in_sheet.get_all_values()  # For search_blanks don't need cell objects. Default to matrix of str.
     while not starting_sheet[0][0].strip():
         starting_sheet.pop(0)  # Remove all rows until the first row that doesn't begin with a blank cell
     out_sheet_row = 1
@@ -45,13 +45,15 @@ def search_blanks(in_sheet):
     for row in starting_sheet:
         if ''.join(row).strip():  # If current row is not blank
             if out_sheet[out_sheet_row][0]:  # If current row already has a title, add all to notes
-                out_sheet[out_sheet_row][12] += ' '.join([x.strip() for x in row if x.strip()])
+                out_sheet[out_sheet_row][12] += ' '.join([x.strip() for x in row if x.strip()]) + ' '
             else:  # If current row has no title, first cell is title, add the rest to notes
                 out_sheet[out_sheet_row][0] = row[0]
                 out_sheet[out_sheet_row][12] += ' '.join([x.strip() for x in row[1:] if x.strip()])
-        elif out_sheet[out_sheet_row][0]: # If the current row is blank, start a new row
+        elif out_sheet[out_sheet_row][0]:  # Given a blank row, if the out sheet previous row is not blank, new row
             out_sheet.append(['', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', ''])
             out_sheet_row += 1
+    if not ''.join(out_sheet[out_sheet_row]):
+        out_sheet.pop(out_sheet_row)  # Function commonly adds excess empty row at end. Remove it.
     return out_sheet
 
 
@@ -64,8 +66,8 @@ def title(text):
         return string
 
 
-def allot_values():
-    for v in final_sheet[1:]:
+def allot_values():  # TODO: Address finder breaks when state abbrev missing. Could find by zip code.
+    for v in final_sheet[1:]:  # TODO: Address finder also breaks "Fort Wayne" into "Fort Way" "NE"
         address = pyap.parse(v[12].upper(), country='US')  # Made Upper because Lower and Title confuse pyap
         if address:
             address_list = [address[0].as_dict()['street_number'], title(address[0].as_dict()['street_name']),
